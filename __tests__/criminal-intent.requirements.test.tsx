@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
-import { renderRouter, screen, fireEvent, waitFor, cleanup, testRouter } from "expo-router/testing-library";
+import { renderRouter, screen, fireEvent, waitFor, testRouter } from "expo-router/testing-library";
 import fs from "fs";
 import path from "path";
 import { Alert } from "react-native";
@@ -68,6 +68,21 @@ describe("route and architecture requirements", () => {
     expect(indexSource).not.toMatch(/params:\s*{[^}]*(title|details|date|solved|photoUri)/i);
   });
 
+  it("uses React Context for app settings or theming, but not for crime records", () => {
+    const contextDir = routeFile("src/context");
+    expect(fs.existsSync(contextDir)).toBe(true);
+
+    const contextSource = fs
+      .readdirSync(contextDir, { recursive: true })
+      .filter((file: unknown) => String(file).endsWith(".ts") || String(file).endsWith(".tsx"))
+      .map((file: unknown) => fs.readFileSync(path.join(contextDir, String(file)), "utf8"))
+      .join("\n");
+
+    expect(contextSource).toMatch(/createContext/);
+    expect(contextSource).toMatch(/theme|settings|colorScheme|darkMode/i);
+    expect(contextSource).not.toMatch(/crime|crimes/i);
+  });
+
   it("breaks the app into reusable non-route modules", () => {
     expect(fs.existsSync(routeFile("src/components"))).toBe(true);
     expect(fs.existsSync(routeFile("src/lib"))).toBe(true);
@@ -129,7 +144,7 @@ describe("index screen", () => {
     const addButton = await screen.findByLabelText(/add crime/i);
     fireEvent.press(addButton);
 
-    await waitFor(() => expect(screen).toHavePathname("/crime/[id]"));
+    await waitFor(() => expect(app.getPathname()).toMatch(/^\/crime\/[0-9a-f-]{36}$/i));
     const params = app.getSearchParams();
     expect(params.id).toMatch(/^[0-9a-f-]{36}$/i);
     expect(screen.queryByLabelText(/add crime/i)).toBeNull();
@@ -142,7 +157,7 @@ describe("index screen", () => {
 
     fireEvent.press(await screen.findByText("Library Vandalism"));
 
-    await waitFor(() => expect(screen).toHavePathname("/crime/[id]"));
+    await waitFor(() => expect(app.getPathname()).toBe(`/crime/${crimes[1].id}`));
     expect(app.getSearchParams()).toEqual(expect.objectContaining({ id: crimes[1].id }));
     expect(await screen.findByDisplayValue("Library Vandalism")).toBeOnTheScreen();
     expect(screen.getByDisplayValue("Graffiti near the stacks.")).toBeOnTheScreen();
@@ -205,9 +220,9 @@ describe("detail screen", () => {
   });
 
   it("updates the index list after saving a new crime and going back", async () => {
-    renderRouter("./src/app", { initialUrl: "/" });
+    const app = renderRouter("./src/app", { initialUrl: "/" });
     fireEvent.press(await screen.findByLabelText(/add crime/i));
-    await waitFor(() => expect(screen).toHavePathname("/crime/[id]"));
+    await waitFor(() => expect(app.getPathname()).toMatch(/^\/crime\/[0-9a-f-]{36}$/i));
 
     fireEvent.changeText(await screen.findByLabelText(/crime title/i), "New Evidence Report");
     fireEvent.changeText(screen.getByLabelText(/crime details/i), "Freshly entered report.");
@@ -216,7 +231,7 @@ describe("detail screen", () => {
 
     testRouter.back("/");
 
-    await waitFor(() => expect(screen).toHavePathname("/"));
+    await waitFor(() => expect(app.getPathname()).toBe("/"));
     expect(await screen.findByText("New Evidence Report")).toBeOnTheScreen();
   });
 });
@@ -227,10 +242,10 @@ describe("settings screen and app-wide settings", () => {
   });
 
   it("shows a settings cog on every non-settings screen and hides it on settings", async () => {
-    renderRouter("./src/app", { initialUrl: "/" });
+    const app = renderRouter("./src/app", { initialUrl: "/" });
 
     fireEvent.press(await screen.findByLabelText(/settings/i));
-    await waitFor(() => expect(screen).toHavePathname("/settings"));
+    await waitFor(() => expect(app.getPathname()).toBe("/settings"));
     expect(screen.queryByLabelText(/settings/i)).toBeNull();
 
     testRouter.back("/");
@@ -249,11 +264,8 @@ describe("settings screen and app-wide settings", () => {
       expect(saved).toEqual(expect.objectContaining({ darkMode: true }));
     });
 
-    cleanup();
-    renderRouter("./src/app", { initialUrl: "/" });
-    expect(await screen.findByTestId("index-screen")).toHaveStyle(
-      expect.objectContaining({ backgroundColor: expect.any(String) })
-    );
+    testRouter.replace("/");
+    expect(await screen.findByTestId("index-screen")).toHaveStyle({ backgroundColor: "#111827" });
     expect(screen.getByTestId("index-screen")).toHaveProp("accessibilityLabel", expect.stringMatching(/dark theme/i));
   });
 
@@ -268,8 +280,7 @@ describe("settings screen and app-wide settings", () => {
       expect(saved).toEqual(expect.objectContaining({ dateFormat: "iso" }));
     });
 
-    cleanup();
-    renderRouter("./src/app", { initialUrl: "/" });
+    testRouter.replace("/");
     expect(await screen.findByText(/2026-05-20/)).toBeOnTheScreen();
   });
 });
