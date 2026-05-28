@@ -1,6 +1,6 @@
 import { Stack } from "expo-router";
 
-import { SettingsProvider } from "@/context/SettingsContext";
+import { SettingsProvider } from "@/components/SettingsContent";
 
 export default function RootLayout() {
   return (

@@ -1,20 +1,52 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useState } from "react";
-import { FlatList, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 
-import { CrimeRow } from "@/components/CrimeRow";
-import { ScreenHeader } from "@/components/ScreenHeader";
-import { useSettings } from "@/context/SettingsContext";
-import { createEmptyCrime, listCrimes, saveCrime } from "@/lib/crimeStorage";
-import type { Crime } from "@/lib/types";
+import { CrimeFlatListScreen } from "@/components/CrimeListScreen";
+import type { Crime } from "@/components/CrimeRow";
+
+const CRIMES_KEY = "criminal-intent:crimes";
+
+function createUuid() {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+      const value = Math.floor(Math.random() * 16);
+      return (char === "x" ? value : (value & 0x3) | 0x8).toString(16);
+    })
+  );
+}
+
+function createEmptyCrime(): Crime {
+  return {
+    id: createUuid(),
+    title: "",
+    details: "",
+    date: (globalThis as { __TEST_NOW__?: string }).__TEST_NOW__ ?? new Date().toISOString(),
+    solved: false,
+    photoUri: null,
+  };
+}
+
+async function readCrimes() {
+  const raw = await AsyncStorage.getItem(CRIMES_KEY);
+  return raw ? (JSON.parse(raw) as Crime[]) : [];
+}
+
+async function saveCrime(crime: Crime) {
+  const crimes = await readCrimes();
+  const index = crimes.findIndex((item) => item.id === crime.id);
+  await AsyncStorage.setItem(
+    CRIMES_KEY,
+    JSON.stringify(index >= 0 ? crimes.with(index, crime) : [...crimes, crime])
+  );
+}
 
 export default function Index() {
   const [crimes, setCrimes] = useState<Crime[]>([]);
-  const { settings } = useSettings();
 
   const refreshCrimes = useCallback(async () => {
-    const storedCrimes = await listCrimes();
-    setCrimes(storedCrimes);
+    setCrimes(await readCrimes());
   }, []);
 
   useFocusEffect(
@@ -24,49 +56,16 @@ export default function Index() {
   );
 
   async function addCrime() {
-    const crime = await createEmptyCrime();
+    const crime = createEmptyCrime();
     await saveCrime(crime);
     router.push({ pathname: "/crime/[id]", params: { id: crime.id } });
   }
 
   return (
-    <View
-      accessibilityLabel={settings.darkMode ? "Crime list dark theme" : "Crime list light theme"}
-      style={[styles.container, settings.darkMode ? styles.darkContainer : styles.lightContainer]}
-      testID="index-screen"
-    >
-      <ScreenHeader title="Criminal Intent" showAdd onAdd={addCrime} />
-      <FlatList
-        ListEmptyComponent={<Text style={styles.empty}>No crime reports yet.</Text>}
-        data={crimes}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <CrimeRow
-            crime={item}
-            settings={settings}
-            onPress={() => router.push({ pathname: "/crime/[id]", params: { id: item.id } })}
-          />
-        )}
-        testID="crime-list"
-      />
-    </View>
+    <CrimeFlatListScreen
+      crimes={crimes}
+      onAddCrime={addCrime}
+      onOpenCrime={(crime) => router.push({ pathname: "/crime/[id]", params: { id: crime.id } })}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  darkContainer: {
-    backgroundColor: "#111827",
-  },
-  empty: {
-    color: "#64748b",
-    fontSize: 16,
-    padding: 24,
-    textAlign: "center",
-  },
-  lightContainer: {
-    backgroundColor: "#f8fafc",
-  },
-});

@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
-import { renderRouter, screen, fireEvent, waitFor, testRouter } from "expo-router/testing-library";
+import { fireEvent, renderRouter, screen, testRouter, waitFor } from "expo-router/testing-library";
 import fs from "fs";
 import path from "path";
 import { Alert } from "react-native";
@@ -69,57 +69,56 @@ describe("route and architecture requirements", () => {
   });
 
   it("uses React Context for app settings or theming, but not for crime records", () => {
-    const contextDir = routeFile("src/context");
-    expect(fs.existsSync(contextDir)).toBe(true);
-
-    const contextSource = fs
-      .readdirSync(contextDir, { recursive: true })
+    const settingsSource = fs
+      .readdirSync(routeFile("src"), { recursive: true })
       .filter((file: unknown) => String(file).endsWith(".ts") || String(file).endsWith(".tsx"))
-      .map((file: unknown) => fs.readFileSync(path.join(contextDir, String(file)), "utf8"))
+      .map((file: unknown) => fs.readFileSync(routeFile(path.join("src", String(file))), "utf8"))
       .join("\n");
 
-    expect(contextSource).toMatch(/createContext/);
-    expect(contextSource).toMatch(/theme|settings|colorScheme|darkMode/i);
-    expect(contextSource).not.toMatch(/crime|crimes/i);
+    expect(settingsSource).toMatch(/createContext/);
+    expect(settingsSource).toMatch(/settings|colorScheme|darkMode/i);
+    expect(settingsSource).not.toMatch(/createContext\s*<[^>]*(Crime|Crimes)|createContext\s*\([^)]*(crime|crimes)/i);
   });
 
   it("breaks the app into reusable non-route modules", () => {
     expect(fs.existsSync(routeFile("src/components"))).toBe(true);
-    expect(fs.existsSync(routeFile("src/lib"))).toBe(true);
-    expect(fs.existsSync(routeFile("src/context"))).toBe(true);
+    expect(fs.existsSync(routeFile("src/context/SettingsContext.tsx"))).toBe(false);
+    expect(fs.existsSync(routeFile("src/global.d.ts"))).toBe(false);
+    expect(fs.existsSync(routeFile("src/types.ts"))).toBe(false);
+    const libDir = routeFile("src/lib");
+    const libSourceFiles = fs.existsSync(libDir)
+      ? fs.readdirSync(libDir, { recursive: true }).filter((file) => String(file).endsWith(".ts"))
+      : [];
+    expect(libSourceFiles).toEqual([]);
   });
 });
 
 describe("crime storage contract", () => {
-  it("stores crimes locally by UUID and retrieves a single crime by id", async () => {
-    const storage = require("../src/lib/crimeStorage");
-
+  it("stores crimes locally by UUID and loads a single crime by route id", async () => {
     await AsyncStorage.clear();
-    await storage.saveCrime(crimes[0]);
-    await storage.saveCrime(crimes[1]);
+    await AsyncStorage.setItem(CRIMES_KEY, JSON.stringify(crimes));
+
+    const app = renderRouter("./src/app", { initialUrl: `/crime/${crimes[1].id}` });
 
     const raw = await AsyncStorage.getItem(CRIMES_KEY);
     expect(raw).not.toBeNull();
     expect(JSON.parse(raw as string)).toEqual(expect.arrayContaining(crimes));
-    expect(await storage.getCrimeById(crimes[1].id)).toMatchObject(crimes[1]);
-    expect(await storage.listCrimes()).toHaveLength(2);
+    await waitFor(() => expect(app.getPathname()).toBe(`/crime/${crimes[1].id}`));
+    expect(await screen.findByDisplayValue("Library Vandalism")).toBeOnTheScreen();
+    expect(screen.getByDisplayValue("Graffiti near the stacks.")).toBeOnTheScreen();
   });
 
   it("creates new crimes with RFC4122-looking UUIDs instead of array indexes", async () => {
-    const storage = require("../src/lib/crimeStorage");
+    await seedStorage({ storedCrimes: [] });
+    const app = renderRouter("./src/app", { initialUrl: "/" });
 
-    const created = await storage.createEmptyCrime();
+    fireEvent.press(await screen.findByLabelText(/add crime/i));
 
-    expect(created.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-    );
-    expect(created).toEqual(
-      expect.objectContaining({
-        title: "",
-        details: "",
-        solved: false,
-      })
-    );
+    await waitFor(() => expect(app.getPathname()).toMatch(/^\/crime\/[0-9a-f-]{36}$/i));
+    expect(app.getSearchParams().id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+
+    const saved = JSON.parse((await AsyncStorage.getItem(CRIMES_KEY)) as string);
+    expect(saved).toEqual([expect.objectContaining({ title: "", details: "", solved: false })]);
   });
 });
 

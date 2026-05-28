@@ -1,7 +1,22 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { formatCrimeDate } from "@/lib/dateFormat";
-import type { AppSettings, Crime } from "@/lib/types";
+import type { AppSettings } from "./SettingsContent";
+
+export type Crime = {
+  id: string;
+  title: string;
+  details: string;
+  date: string;
+  solved: boolean;
+  photoUri?: string | null;
+};
+
+function formatCrimeDate(value: string, dateFormat: AppSettings["dateFormat"]) {
+  const date = new Date(value);
+  return dateFormat === "iso"
+    ? date.toISOString().slice(0, 10)
+    : date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 
 type CrimeRowProps = {
   crime: Crime;
@@ -11,19 +26,25 @@ type CrimeRowProps = {
 
 export function CrimeRow({ crime, settings, onPress }: CrimeRowProps) {
   const title = crime.title.trim() || "Untitled Crime";
+  const isDark = settings.darkMode;
 
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.row, isDark ? styles.darkRow : styles.lightRow, pressed && styles.pressed]}
     >
       <View style={styles.textColumn}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.date}>{formatCrimeDate(crime.date, settings)}</Text>
+        <Text style={[styles.title, isDark ? styles.darkTitle : styles.lightTitle]}>{title}</Text>
+        <Text style={[styles.date, isDark ? styles.darkDate : styles.lightDate]}>
+          {formatCrimeDate(crime.date, settings.dateFormat)}
+        </Text>
       </View>
       {crime.solved ? (
-        <Text accessibilityLabel={`${title} solved handcuff`} style={styles.handcuff}>
+        <Text
+          accessibilityLabel={`${title} solved handcuff`}
+          style={[styles.handcuff, isDark ? styles.darkHandcuff : styles.lightHandcuff]}
+        >
           ⛓
         </Text>
       ) : null}
@@ -32,23 +53,45 @@ export function CrimeRow({ crime, settings, onPress }: CrimeRowProps) {
 }
 
 const styles = StyleSheet.create({
+  darkDate: {
+    color: "#cbd5e1",
+  },
+  darkHandcuff: {
+    color: "#e2e8f0",
+  },
+  darkRow: {
+    backgroundColor: "#1f2937",
+    borderBottomColor: "#334155",
+  },
+  darkTitle: {
+    color: "#f8fafc",
+  },
   date: {
-    color: "#64748b",
     fontSize: 13,
     marginTop: 4,
   },
   handcuff: {
-    color: "#334155",
     fontSize: 24,
     paddingLeft: 12,
+  },
+  lightDate: {
+    color: "#64748b",
+  },
+  lightHandcuff: {
+    color: "#334155",
+  },
+  lightRow: {
+    backgroundColor: "#ffffff",
+    borderBottomColor: "#e2e8f0",
+  },
+  lightTitle: {
+    color: "#0f172a",
   },
   pressed: {
     opacity: 0.65,
   },
   row: {
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderBottomColor: "#e2e8f0",
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     minHeight: 72,
@@ -59,7 +102,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    color: "#0f172a",
     fontSize: 17,
     fontWeight: "700",
   },
