@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 
 import { ScreenFrame } from "./ScreenFrame";
@@ -26,21 +26,52 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 async function getStoredSettings() {
   const raw = await AsyncStorage.getItem(SETTINGS_KEY);
-  return raw ? { ...defaultSettings, ...(JSON.parse(raw) as Partial<AppSettings>) } : defaultSettings;
+
+  if (!raw) {
+    return defaultSettings;
+  }
+
+  try {
+    return { ...defaultSettings, ...(JSON.parse(raw) as Partial<AppSettings>) };
+  } catch (error) {
+    console.warn("Unable to parse stored settings.", error);
+    return defaultSettings;
+  }
 }
 
 export function SettingsProvider({ children }: PropsWithChildren) {
   const [settings, setSettings] = useState(defaultSettings);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    getStoredSettings().then(setSettings);
+    getStoredSettings()
+      .then(setSettings)
+      .catch((error) => {
+        console.warn("Unable to load stored settings.", error);
+      })
+      .finally(() => {
+        setIsHydrated(true);
+      });
   }, []);
 
-  const updateSettings = async (patch: Partial<AppSettings>) => {
-    const next = { ...settings, ...patch };
-    setSettings(next);
-    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
-  };
+  const updateSettings = useCallback(async (patch: Partial<AppSettings>) => {
+    let previousSettings = defaultSettings;
+    let nextSettings = defaultSettings;
+
+    setSettings((currentSettings) => {
+      previousSettings = currentSettings;
+      nextSettings = { ...currentSettings, ...patch };
+      return nextSettings;
+    });
+
+    try {
+      await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(nextSettings));
+    } catch (error) {
+      console.warn("Unable to save settings.", error);
+      setSettings((currentSettings) => (currentSettings === nextSettings ? previousSettings : currentSettings));
+      throw error;
+    }
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -48,8 +79,12 @@ export function SettingsProvider({ children }: PropsWithChildren) {
       setDarkMode: (enabled: boolean) => updateSettings({ darkMode: enabled }),
       setDateFormat: (dateFormat: AppSettings["dateFormat"]) => updateSettings({ dateFormat }),
     }),
-    [settings]
+    [settings, updateSettings]
   );
+
+  if (!isHydrated) {
+    return null;
+  }
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
@@ -83,35 +118,44 @@ export function SettingsContent({ onSetDarkMode, onSetDateFormat }: SettingsCont
 
         <View style={[styles.settingBlock, isDark ? styles.darkCard : styles.lightCard]}>
           <Text style={[styles.label, isDark ? styles.darkLabel : styles.lightLabel]}>Date Format</Text>
-          <Pressable
+          <View
+            accessible
             accessibilityLabel="Date format"
-            accessibilityRole="button"
-            onPress={() => undefined}
             style={[styles.segmentedControl, isDark ? styles.darkSegmentedControl : styles.lightSegmentedControl]}
           >
-            <Pressable accessibilityRole="button" onPress={() => onSetDateFormat("medium")}>
+            <Pressable
+              accessibilityLabel="Medium"
+              accessibilityRole="button"
+              onPress={() => onSetDateFormat("medium")}
+              style={[styles.segmentButton, settings.dateFormat === "medium" && styles.activeSegmentButton]}
+            >
               <Text
                 style={[
-                  styles.segment,
-                  isDark ? styles.darkSegment : styles.lightSegment,
-                  settings.dateFormat === "medium" && styles.activeSegment,
+                  styles.segmentText,
+                  isDark ? styles.darkSegmentText : styles.lightSegmentText,
+                  settings.dateFormat === "medium" && styles.activeSegmentText,
                 ]}
               >
                 Medium
               </Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => onSetDateFormat("iso")}>
+            <Pressable
+              accessibilityLabel="ISO"
+              accessibilityRole="button"
+              onPress={() => onSetDateFormat("iso")}
+              style={[styles.segmentButton, settings.dateFormat === "iso" && styles.activeSegmentButton]}
+            >
               <Text
                 style={[
-                  styles.segment,
-                  isDark ? styles.darkSegment : styles.lightSegment,
-                  settings.dateFormat === "iso" && styles.activeSegment,
+                  styles.segmentText,
+                  isDark ? styles.darkSegmentText : styles.lightSegmentText,
+                  settings.dateFormat === "iso" && styles.activeSegmentText,
                 ]}
               >
                 ISO
               </Text>
             </Pressable>
-          </Pressable>
+          </View>
         </View>
       </View>
     </ScreenFrame>
@@ -119,8 +163,10 @@ export function SettingsContent({ onSetDarkMode, onSetDateFormat }: SettingsCont
 }
 
 const styles = StyleSheet.create({
-  activeSegment: {
+  activeSegmentButton: {
     backgroundColor: "#2563eb",
+  },
+  activeSegmentText: {
     color: "#ffffff",
   },
   content: {
@@ -136,7 +182,7 @@ const styles = StyleSheet.create({
   darkLabel: {
     color: "#f8fafc",
   },
-  darkSegment: {
+  darkSegmentText: {
     color: "#f8fafc",
   },
   darkSegmentedControl: {
@@ -159,7 +205,7 @@ const styles = StyleSheet.create({
   lightLabel: {
     color: "#0f172a",
   },
-  lightSegment: {
+  lightSegmentText: {
     color: "#0f172a",
   },
   lightSegmentedControl: {
@@ -172,13 +218,15 @@ const styles = StyleSheet.create({
     marginTop: 10,
     padding: 4,
   },
-  segment: {
+  segmentButton: {
     borderRadius: 6,
-    fontSize: 15,
-    fontWeight: "700",
     minWidth: 88,
     paddingHorizontal: 14,
     paddingVertical: 9,
+  },
+  segmentText: {
+    fontSize: 15,
+    fontWeight: "700",
     textAlign: "center",
   },
   settingBlock: {

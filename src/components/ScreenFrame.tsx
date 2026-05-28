@@ -8,6 +8,7 @@ type ScreenFrameProps = PropsWithChildren<{
   darkMode: boolean;
   onAdd?: () => void;
   showAdd?: boolean;
+  showBack?: boolean;
   showSettings?: boolean;
   testID?: string;
   title: string;
@@ -19,6 +20,7 @@ export function ScreenFrame({
   darkMode,
   onAdd,
   showAdd,
+  showBack,
   showSettings,
   testID,
   title,
@@ -29,7 +31,14 @@ export function ScreenFrame({
       style={[styles.container, darkMode ? styles.darkContainer : styles.lightContainer]}
       testID={testID}
     >
-      <ScreenHeader darkMode={darkMode} title={title} showAdd={showAdd} showSettings={showSettings} onAdd={onAdd} />
+      <ScreenHeader
+        darkMode={darkMode}
+        title={title}
+        showAdd={showAdd}
+        showBack={showBack}
+        showSettings={showSettings}
+        onAdd={onAdd}
+      />
       {children}
     </View>
   );

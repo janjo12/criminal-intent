@@ -21,6 +21,7 @@ export function CrimeFlatListScreen({ crimes, onAddCrime, onOpenCrime }: CrimeLi
       darkMode={settings.darkMode}
       onAdd={onAddCrime}
       showAdd
+      showBack={false}
       testID="index-screen"
       title="Criminal Intent"
     >
