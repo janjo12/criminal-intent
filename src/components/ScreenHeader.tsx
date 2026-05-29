@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HeaderIconButton } from "./HeaderIconButton";
 
-const EXPO_GO_TOP_OFFSET = 28;
+const EXPO_GO_TOP_OFFSET = 48;
 
 type ScreenHeaderProps = {
   darkMode: boolean;

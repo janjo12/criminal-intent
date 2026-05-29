@@ -42,4 +42,13 @@ jest.mock("expo-symbols", () => ({
   SymbolView: "SymbolView",
 }));
 
+jest.mock("@expo/vector-icons", () => {
+  const React = require("react");
+  const { Text } = require("react-native");
+
+  return {
+    MaterialCommunityIcons: ({ name, ...props }) => React.createElement(Text, props, name),
+  };
+});
+
 globalThis.__TEST_NOW__ = "2026-05-27T05:00:00.000Z";

@@ -193,17 +193,15 @@ describe("detail screen", () => {
     });
   });
 
-  it("saves edits to device storage and confirms success", async () => {
-    renderRouter("./src/app", { initialUrl: `/crime/${crimes[0].id}` });
+  it("saves edits to device storage and returns to the index screen", async () => {
+    const app = renderRouter("./src/app", { initialUrl: `/crime/${crimes[0].id}` });
 
     fireEvent.changeText(await screen.findByLabelText(/crime title/i), "Recovered Bicycle");
     fireEvent.changeText(screen.getByLabelText(/crime details/i), "Owner found the bicycle.");
     fireEvent.press(screen.getByLabelText(/mark solved/i));
     fireEvent.press(screen.getByLabelText(/save crime/i));
 
-    await waitFor(() =>
-      expect(Alert.alert).toHaveBeenCalledWith(expect.stringMatching(/saved|success/i), expect.anything())
-    );
+    await waitFor(() => expect(app.getPathname()).toBe("/"));
 
     const saved = JSON.parse((await AsyncStorage.getItem(CRIMES_KEY)) as string);
     expect(saved).toEqual(
@@ -218,7 +216,7 @@ describe("detail screen", () => {
     );
   });
 
-  it("updates the index list after saving a new crime and going back", async () => {
+  it("updates the index list after saving a new crime", async () => {
     const app = renderRouter("./src/app", { initialUrl: "/" });
     fireEvent.press(await screen.findByLabelText(/add crime/i));
     await waitFor(() => expect(app.getPathname()).toMatch(/^\/crime\/[0-9a-f-]{36}$/i));
@@ -226,9 +224,6 @@ describe("detail screen", () => {
     fireEvent.changeText(await screen.findByLabelText(/crime title/i), "New Evidence Report");
     fireEvent.changeText(screen.getByLabelText(/crime details/i), "Freshly entered report.");
     fireEvent.press(screen.getByLabelText(/save crime/i));
-    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
-
-    testRouter.back("/");
 
     await waitFor(() => expect(app.getPathname()).toBe("/"));
     expect(await screen.findByText("New Evidence Report")).toBeOnTheScreen();

@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { AppSettings } from "./SettingsContent";
@@ -41,12 +42,13 @@ export function CrimeRow({ crime, settings, onPress }: CrimeRowProps) {
         </Text>
       </View>
       {crime.solved ? (
-        <Text
+        <MaterialCommunityIcons
           accessibilityLabel={`${title} solved handcuff`}
-          style={[styles.handcuff, isDark ? styles.darkHandcuff : styles.lightHandcuff]}
-        >
-          ⛓
-        </Text>
+          color={isDark ? "#e2e8f0" : "#334155"}
+          name="handcuffs"
+          size={24}
+          style={styles.handcuff}
+        />
       ) : null}
     </Pressable>
   );
@@ -55,9 +57,6 @@ export function CrimeRow({ crime, settings, onPress }: CrimeRowProps) {
 const styles = StyleSheet.create({
   darkDate: {
     color: "#cbd5e1",
-  },
-  darkHandcuff: {
-    color: "#e2e8f0",
   },
   darkRow: {
     backgroundColor: "#1f2937",
@@ -71,14 +70,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   handcuff: {
-    fontSize: 24,
-    paddingLeft: 12,
+    marginLeft: 12,
   },
   lightDate: {
     color: "#64748b",
-  },
-  lightHandcuff: {
-    color: "#334155",
   },
   lightRow: {
     backgroundColor: "#ffffff",
