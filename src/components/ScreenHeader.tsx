@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HeaderIconButton } from "./HeaderIconButton";
 
+const EXPO_GO_TOP_OFFSET = 28;
+
 type ScreenHeaderProps = {
   darkMode: boolean;
   title: string;
@@ -17,7 +19,13 @@ export function ScreenHeader({ darkMode, title, showAdd, showBack = true, showSe
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.header, darkMode ? styles.darkHeader : styles.lightHeader, { paddingTop: insets.top + 8 }]}>
+    <View
+      style={[
+        styles.header,
+        darkMode ? styles.darkHeader : styles.lightHeader,
+        { paddingTop: insets.top + EXPO_GO_TOP_OFFSET },
+      ]}
+    >
       <View style={styles.leftActions}>
         {showBack ? (
           <HeaderIconButton accessibilityLabel="Go back" darkMode={darkMode} icon="<" onPress={() => router.back()} />
