@@ -59,7 +59,7 @@ export function useCrimeDetail() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       quality: 0.85,
     });
 

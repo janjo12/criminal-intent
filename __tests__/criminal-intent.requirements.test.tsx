@@ -183,8 +183,10 @@ describe("detail screen", () => {
 
     fireEvent.press(screen.getByLabelText(/change date/i));
     expect(await screen.findByTestId("crime-date-picker-modal")).toBeOnTheScreen();
-    fireEvent(screen.getByTestId("crime-date-picker"), "onChange", {}, new Date("2026-06-01T12:00:00.000Z"));
-    expect(screen.getByText(/jun|june|06\/01\/2026|2026-06-01/i)).toBeOnTheScreen();
+    fireEvent.press(screen.getByLabelText(/next month/i));
+    fireEvent.press(screen.getByLabelText(/select june 1, 2026/i));
+    fireEvent.press(screen.getByText(/ok/i));
+    await waitFor(() => expect(screen.getByText(/jun|june|06\/01\/2026|2026-06-01/i)).toBeOnTheScreen());
 
     fireEvent.press(screen.getByLabelText(/choose photo|camera roll|photo library/i));
     await waitFor(() => expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalled());
