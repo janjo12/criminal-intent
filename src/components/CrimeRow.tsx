@@ -1,23 +1,9 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { formatCrimeDate } from "@/models/crime";
 import type { AppSettings } from "./SettingsContent";
-
-export type Crime = {
-  id: string;
-  title: string;
-  details: string;
-  date: string;
-  solved: boolean;
-  photoUri?: string | null;
-};
-
-function formatCrimeDate(value: string, dateFormat: AppSettings["dateFormat"]) {
-  const date = new Date(value);
-  return dateFormat === "iso"
-    ? date.toISOString().slice(0, 10)
-    : date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
+import type { Crime } from "@/models/crime";
 
 type CrimeRowProps = {
   crime: Crime;

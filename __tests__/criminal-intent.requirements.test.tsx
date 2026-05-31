@@ -68,28 +68,42 @@ describe("route and architecture requirements", () => {
     expect(indexSource).not.toMatch(/params:\s*{[^}]*(title|details|date|solved|photoUri)/i);
   });
 
-  it("uses React Context for app settings or theming, but not for crime records", () => {
+  it("shares app settings through AsyncStorage, never React Context", () => {
     const settingsSource = fs
       .readdirSync(routeFile("src"), { recursive: true })
       .filter((file: unknown) => String(file).endsWith(".ts") || String(file).endsWith(".tsx"))
       .map((file: unknown) => fs.readFileSync(routeFile(path.join("src", String(file))), "utf8"))
       .join("\n");
 
-    expect(settingsSource).toMatch(/createContext/);
+    expect(settingsSource).toMatch(/AsyncStorage/);
     expect(settingsSource).toMatch(/settings|colorScheme|darkMode/i);
-    expect(settingsSource).not.toMatch(/createContext\s*<[^>]*(Crime|Crimes)|createContext\s*\([^)]*(crime|crimes)/i);
+    expect(settingsSource).not.toMatch(/createContext|useContext/);
   });
 
-  it("breaks the app into reusable non-route modules", () => {
+  it("keeps route files thin and shared crime logic in predictable modules", () => {
     expect(fs.existsSync(routeFile("src/components"))).toBe(true);
-    expect(fs.existsSync(routeFile("src/context/SettingsContext.tsx"))).toBe(false);
-    expect(fs.existsSync(routeFile("src/global.d.ts"))).toBe(false);
-    expect(fs.existsSync(routeFile("src/types.ts"))).toBe(false);
-    const libDir = routeFile("src/lib");
-    const libSourceFiles = fs.existsSync(libDir)
-      ? fs.readdirSync(libDir, { recursive: true }).filter((file) => String(file).endsWith(".ts"))
-      : [];
-    expect(libSourceFiles).toEqual([]);
+    expect(fs.existsSync(routeFile("src/models/crime.ts"))).toBe(true);
+
+    const routeSource = fs
+      .readdirSync(routeFile("src/app"), { recursive: true })
+      .filter((file: unknown) => String(file).endsWith(".tsx"))
+      .map((file: unknown) => fs.readFileSync(routeFile(path.join("src/app", String(file))), "utf8"))
+      .join("\n");
+
+    expect(routeSource).not.toMatch(/AsyncStorage|expo-crypto|expo-image-picker|createCrime|readCrimes|saveCrime/);
+  });
+
+  it("avoids deprecated navigation and picker APIs", () => {
+    const source = fs
+      .readdirSync(routeFile("src"), { recursive: true })
+      .filter((file: unknown) => String(file).endsWith(".ts") || String(file).endsWith(".tsx"))
+      .map((file: unknown) => fs.readFileSync(routeFile(path.join("src", String(file))), "utf8"))
+      .join("\n");
+
+    expect(source).not.toMatch(/@react-navigation/);
+    expect(source).not.toMatch(/onChange=\{/);
+    expect(source).not.toMatch(/headerBackImageSource|headerLargeTitle\b|statusBarBackgroundColor|statusBarTranslucent/);
+    expect(source).toMatch(/onValueChange=\{/);
   });
 });
 
@@ -108,7 +122,7 @@ describe("crime storage contract", () => {
     expect(screen.getByDisplayValue("Graffiti near the stacks.")).toBeOnTheScreen();
   });
 
-  it("creates new crimes with RFC4122-looking UUIDs instead of array indexes", async () => {
+  it("opens unsaved new crimes with RFC4122-looking UUIDs instead of array indexes", async () => {
     await seedStorage({ storedCrimes: [] });
     const app = renderRouter("./src/app", { initialUrl: "/" });
 
@@ -117,8 +131,7 @@ describe("crime storage contract", () => {
     await waitFor(() => expect(app.getPathname()).toMatch(/^\/crime\/[0-9a-f-]{36}$/i));
     expect(app.getSearchParams().id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
 
-    const saved = JSON.parse((await AsyncStorage.getItem(CRIMES_KEY)) as string);
-    expect(saved).toEqual([expect.objectContaining({ title: "", details: "", solved: false })]);
+    expect(JSON.parse((await AsyncStorage.getItem(CRIMES_KEY)) as string)).toEqual([]);
   });
 });
 
@@ -149,6 +162,18 @@ describe("index screen", () => {
     expect(screen.queryByLabelText(/add crime/i)).toBeNull();
     expect(screen.getByLabelText(/crime title/i)).toHaveProp("value", "");
     expect(screen.getByLabelText(/crime details/i)).toHaveProp("value", "");
+  });
+
+  it("does not store a new crime unless Save is pressed", async () => {
+    const app = renderRouter("./src/app", { initialUrl: "/" });
+
+    fireEvent.press(await screen.findByLabelText(/add crime/i));
+    await waitFor(() => expect(app.getPathname()).toMatch(/^\/crime\/[0-9a-f-]{36}$/i));
+
+    fireEvent.press(await screen.findByLabelText(/go back/i));
+    await waitFor(() => expect(app.getPathname()).toBe("/"));
+
+    expect(JSON.parse((await AsyncStorage.getItem(CRIMES_KEY)) as string)).toEqual(crimes);
   });
 
   it("opens a filled detail screen when a crime row is pressed", async () => {
@@ -182,10 +207,9 @@ describe("detail screen", () => {
     fireEvent.press(screen.getByLabelText(/mark solved/i));
 
     fireEvent.press(screen.getByLabelText(/change date/i));
-    expect(await screen.findByTestId("crime-date-picker-modal")).toBeOnTheScreen();
-    fireEvent.press(screen.getByLabelText(/next month/i));
-    fireEvent.press(screen.getByLabelText(/select june 1, 2026/i));
-    fireEvent.press(screen.getByText(/ok/i));
+    fireEvent(await screen.findByTestId("crime-date-picker"), "valueChange", {
+      nativeEvent: { timestamp: new Date("2026-06-01T12:00:00.000Z").getTime(), utcOffset: 0 },
+    }, new Date("2026-06-01T12:00:00.000Z"));
     await waitFor(() => expect(screen.getByText(/jun|june|06\/01\/2026|2026-06-01/i)).toBeOnTheScreen());
 
     fireEvent.press(screen.getByLabelText(/choose photo|camera roll|photo library/i));

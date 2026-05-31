@@ -1,11 +1,13 @@
-import { Stack } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 
-import { SettingsProvider } from "@/components/SettingsContent";
+import { useSettings } from "@/components/SettingsContent";
 
 export default function RootLayout() {
+  const { isHydrated, settings } = useSettings();
+
   return (
-    <SettingsProvider>
-      <Stack screenOptions={{ headerShown: false }} />
-    </SettingsProvider>
+    <ThemeProvider value={isHydrated && settings.darkMode ? DarkTheme : DefaultTheme}>
+      <Stack />
+    </ThemeProvider>
   );
 }

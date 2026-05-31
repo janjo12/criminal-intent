@@ -35,9 +35,23 @@ jest.mock("expo-image-picker", () => ({
   })),
 }));
 
+jest.mock("expo-crypto", () => ({
+  randomUUID: jest.fn(() => "33333333-3333-4333-8333-333333333333"),
+}));
+
 jest.mock("expo-symbols", () => ({
   SymbolView: "SymbolView",
 }));
+
+jest.mock("@react-native-community/datetimepicker", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+
+  return {
+    __esModule: true,
+    default: ({ onValueChange, ...props }) => React.createElement(View, { ...props, onValueChange }),
+  };
+});
 
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");

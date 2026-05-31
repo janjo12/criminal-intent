@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Appearance, Pressable, StyleSheet, Switch, Text, useColorScheme, View } from "react-native";
 
 import { ScreenFrame } from "./ScreenFrame";
 
@@ -9,22 +9,24 @@ export type AppSettings = {
   dateFormat: "medium" | "iso";
 };
 
-type SettingsContextValue = {
+type SettingsValue = {
+  isHydrated: boolean;
   settings: AppSettings;
   setDarkMode: (enabled: boolean) => Promise<void>;
   setDateFormat: (dateFormat: AppSettings["dateFormat"]) => Promise<void>;
 };
 
-type SettingsContentProps = {
-  onSetDarkMode: (enabled: boolean) => void;
-  onSetDateFormat: (dateFormat: AppSettings["dateFormat"]) => void;
-};
-
 const SETTINGS_KEY = "criminal-intent:settings";
-const defaultSettings: AppSettings = { darkMode: false, dateFormat: "medium" };
-const SettingsContext = createContext<SettingsContextValue | null>(null);
+const getDefaultSettings = (darkMode: boolean): AppSettings => ({ darkMode, dateFormat: "medium" });
+let cachedSettings: AppSettings | null = null;
+const settingsListeners = new Set<(settings: AppSettings) => void>();
 
-async function getStoredSettings() {
+function broadcastSettings(settings: AppSettings) {
+  cachedSettings = settings;
+  settingsListeners.forEach((listener) => listener(settings));
+}
+
+async function getStoredSettings(defaultSettings: AppSettings) {
   const raw = await AsyncStorage.getItem(SETTINGS_KEY);
 
   if (!raw) {
@@ -39,72 +41,85 @@ async function getStoredSettings() {
   }
 }
 
-export function SettingsProvider({ children }: PropsWithChildren) {
-  const [settings, setSettings] = useState(defaultSettings);
-  const [isHydrated, setIsHydrated] = useState(false);
+export function useSettings(): SettingsValue {
+  const systemColorScheme = useColorScheme();
+  const [defaultSettings] = useState(() => getDefaultSettings(systemColorScheme === "dark"));
+  const [settings, setSettings] = useState(cachedSettings ?? defaultSettings);
+  const [isHydrated, setIsHydrated] = useState(cachedSettings !== null);
 
   useEffect(() => {
-    getStoredSettings()
-      .then(setSettings)
+    let isMounted = true;
+
+    getStoredSettings(defaultSettings)
+      .then((storedSettings) => {
+        cachedSettings = storedSettings;
+        if (isMounted) {
+          setSettings(storedSettings);
+        }
+      })
       .catch((error) => {
         console.warn("Unable to load stored settings.", error);
+        cachedSettings = defaultSettings;
       })
       .finally(() => {
-        setIsHydrated(true);
+        if (isMounted) {
+          setIsHydrated(true);
+        }
       });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [defaultSettings]);
+
+  useEffect(() => {
+    Appearance.setColorScheme(settings.darkMode ? "dark" : "light");
+  }, [settings.darkMode]);
+
+  useEffect(() => {
+    const listener = (nextSettings: AppSettings) => {
+      setSettings(nextSettings);
+      setIsHydrated(true);
+    };
+
+    settingsListeners.add(listener);
+
+    return () => {
+      settingsListeners.delete(listener);
+    };
   }, []);
 
-  const updateSettings = useCallback(async (patch: Partial<AppSettings>) => {
-    let previousSettings = defaultSettings;
-    let nextSettings = defaultSettings;
+  async function updateSettings(patch: Partial<AppSettings>) {
+    const previousSettings = settings;
+    const nextSettings = { ...settings, ...patch };
 
-    setSettings((currentSettings) => {
-      previousSettings = currentSettings;
-      nextSettings = { ...currentSettings, ...patch };
-      return nextSettings;
-    });
+    setSettings(nextSettings);
+    broadcastSettings(nextSettings);
 
     try {
       await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(nextSettings));
     } catch (error) {
       console.warn("Unable to save settings.", error);
       setSettings((currentSettings) => (currentSettings === nextSettings ? previousSettings : currentSettings));
+      broadcastSettings(previousSettings);
       throw error;
     }
-  }, []);
-
-  const value = useMemo(
-    () => ({
-      settings,
-      setDarkMode: (enabled: boolean) => updateSettings({ darkMode: enabled }),
-      setDateFormat: (dateFormat: AppSettings["dateFormat"]) => updateSettings({ dateFormat }),
-    }),
-    [settings, updateSettings]
-  );
-
-  if (!isHydrated) {
-    return null;
   }
 
-  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
+  return {
+    isHydrated,
+    settings,
+    setDarkMode: (enabled) => updateSettings({ darkMode: enabled }),
+    setDateFormat: (dateFormat) => updateSettings({ dateFormat }),
+  };
 }
 
-export function useSettings() {
-  const value = useContext(SettingsContext);
-
-  if (!value) {
-    throw new Error("useSettings must be used inside SettingsProvider");
-  }
-
-  return value;
-}
-
-export function SettingsContent({ onSetDarkMode, onSetDateFormat }: SettingsContentProps) {
-  const { settings } = useSettings();
+export function SettingsContent() {
+  const { setDarkMode, setDateFormat, settings } = useSettings();
   const isDark = settings.darkMode;
 
   return (
-    <ScreenFrame darkMode={isDark} showSettings={false} title="Settings">
+    <ScreenFrame darkMode={isDark}>
       <View style={styles.content}>
         <View style={[styles.settingRow, isDark ? styles.darkCard : styles.lightCard]}>
           <View style={styles.settingText}>
@@ -113,7 +128,7 @@ export function SettingsContent({ onSetDarkMode, onSetDateFormat }: SettingsCont
               Use a darker background on app screens.
             </Text>
           </View>
-          <Switch accessibilityLabel="Dark mode" onValueChange={onSetDarkMode} value={settings.darkMode} />
+          <Switch accessibilityLabel="Dark mode" onValueChange={setDarkMode} value={settings.darkMode} />
         </View>
 
         <View style={[styles.settingBlock, isDark ? styles.darkCard : styles.lightCard]}>
@@ -126,7 +141,7 @@ export function SettingsContent({ onSetDarkMode, onSetDateFormat }: SettingsCont
             <Pressable
               accessibilityLabel="Medium"
               accessibilityRole="button"
-              onPress={() => onSetDateFormat("medium")}
+              onPress={() => setDateFormat("medium")}
               style={[styles.segmentButton, settings.dateFormat === "medium" && styles.activeSegmentButton]}
             >
               <Text
@@ -142,7 +157,7 @@ export function SettingsContent({ onSetDarkMode, onSetDateFormat }: SettingsCont
             <Pressable
               accessibilityLabel="ISO"
               accessibilityRole="button"
-              onPress={() => onSetDateFormat("iso")}
+              onPress={() => setDateFormat("iso")}
               style={[styles.segmentButton, settings.dateFormat === "iso" && styles.activeSegmentButton]}
             >
               <Text

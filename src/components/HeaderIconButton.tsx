@@ -1,21 +1,28 @@
-import { Pressable, StyleSheet, Text } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useTheme } from "expo-router";
+import { Pressable, StyleSheet } from "react-native";
+
+import type { ComponentProps } from "react";
+import type { StyleProp, ViewStyle } from "react-native";
 
 type HeaderIconButtonProps = {
   accessibilityLabel: string;
-  darkMode?: boolean;
-  icon: string;
+  icon: ComponentProps<typeof MaterialCommunityIcons>["name"];
   onPress: () => void;
+  style?: StyleProp<ViewStyle>;
 };
 
-export function HeaderIconButton({ accessibilityLabel, darkMode = false, icon, onPress }: HeaderIconButtonProps) {
+export function HeaderIconButton({ accessibilityLabel, icon, onPress, style }: HeaderIconButtonProps) {
+  const theme = useTheme();
+
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [styles.button, darkMode ? styles.darkButton : styles.lightButton, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.button, style, pressed && styles.pressed]}
     >
-      <Text style={[styles.icon, darkMode ? styles.darkIcon : styles.lightIcon]}>{icon}</Text>
+      <MaterialCommunityIcons color={theme.colors.primary} name={icon} size={26} />
     </Pressable>
   );
 }
@@ -24,25 +31,9 @@ const styles = StyleSheet.create({
   button: {
     alignItems: "center",
     borderRadius: 8,
-    height: 40,
+    height: 36,
     justifyContent: "center",
-    width: 40,
-  },
-  darkButton: {
-    backgroundColor: "#1f2937",
-  },
-  darkIcon: {
-    color: "#f8fafc",
-  },
-  icon: {
-    fontSize: 24,
-    fontWeight: "700",
-  },
-  lightButton: {
-    backgroundColor: "#e2e8f0",
-  },
-  lightIcon: {
-    color: "#0f172a",
+    width: 36,
   },
   pressed: {
     opacity: 0.55,

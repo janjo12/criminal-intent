@@ -4,28 +4,24 @@ import { CrimeRow } from "./CrimeRow";
 import { ScreenFrame } from "./ScreenFrame";
 import { useSettings } from "./SettingsContent";
 
-import type { Crime } from "./CrimeRow";
+import type { Crime } from "@/models/crime";
 
 type CrimeListScreenProps = {
   crimes: Crime[];
-  onAddCrime: () => void;
   onOpenCrime: (crime: Crime) => void;
 };
 
-export function CrimeFlatListScreen({ crimes, onAddCrime, onOpenCrime }: CrimeListScreenProps) {
+export function CrimeFlatListScreen({ crimes, onOpenCrime }: CrimeListScreenProps) {
   const { settings } = useSettings();
 
   return (
     <ScreenFrame
       accessibilityLabel={settings.darkMode ? "Crime list dark theme" : "Crime list light theme"}
       darkMode={settings.darkMode}
-      onAdd={onAddCrime}
-      showAdd
-      showBack={false}
       testID="index-screen"
-      title="Criminal Intent"
     >
       <FlatList
+        contentInsetAdjustmentBehavior="automatic"
         ListEmptyComponent={
           <Text style={[styles.empty, settings.darkMode ? styles.darkEmpty : styles.lightEmpty]}>No crime reports yet.</Text>
         }
